@@ -2,20 +2,12 @@
 session_start();
 include("../main_connection.php");
 
-$baseUrl = isset($_SERVER['HTTPS']) ? "https://" : "http://";
-$baseUrl .= $_SERVER['HTTP_HOST'] . 'localhost';
-// Alternatively, if you have a specific base path:
-// $baseUrl = "http://yourdomain.com/yourproject/";
-
-// Check if image exists (optional but recommended)
+// Check if image exists
 $imagePath = '../images/hotel3.jpg';
 $imageExists = file_exists($imagePath);
 
-
-
-// Database connections
-$usm_connection = $connections["rest_soliera_usm"];
-$cr2_usm = $connections["rest_core_2_usm"];
+// Database connection - CHANGED TO rest_soliera_usm
+$db_connection = $connections["rest_soliera_usm"];
 
 // Initialize variables
 $employee_ID = trim($_POST["employee_id"] ?? '');
@@ -113,20 +105,9 @@ if ($employee_ID !== '' && isset($_SESSION[$loginAttemptsKey]) && $_SESSION[$log
 
 // === Main Login Logic ===
 if ($_SERVER["REQUEST_METHOD"] === "POST" && $employee_ID && $password) {
-    // Step 1: CAPTCHA validation
-    // $recaptcha_secret = "6Ld4W8ArAAAAAEX9YfG9ZzKGC9SiCVl5gwnpJZE-";
-    // $recaptcha_response = $_POST['g-recaptcha-response'] ?? '';
-    // $verify = file_get_contents("https://www.google.com/recaptcha/api/siteverify?secret={$recaptcha_secret}&response={$recaptcha_response}");
-    // $captcha_success = json_decode($verify);
-
-    // if (!$captcha_success->success) {
-    //     $_SESSION["loginError"] = "Captcha verification failed. Please try again.";
-    //     header("Location: index.php");
-    //     exit();
-    // }
-
-    // Core 2 Check
-    $stmt = mysqli_prepare($cr2_usm, "SELECT email, employee_name, password, Dept_id, employee_id, role FROM department_accounts WHERE employee_id = ?");
+    
+    // Check in Department USM (rest_soliera_usm database)
+    $stmt = mysqli_prepare($db_connection, "SELECT email, employee_name, password, role, Dept_id FROM department_accounts WHERE employee_id = ?");
     mysqli_stmt_bind_param($stmt, "s", $employee_ID);
     mysqli_stmt_execute($stmt);
     $result = mysqli_stmt_get_result($stmt);
@@ -137,9 +118,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && $employee_ID && $password) {
         $Role = $row["role"];
         $Name = $row["employee_name"];
 
-        // Password check
         if ($password === $row["password"]) {
-            // Generate OTP and store PENDING login state
+            // For Soliera main domain users - generate OTP for 2FA
             $otp = rand(100000, 999999);
             $_SESSION["otp"] = (string)$otp;
             $_SESSION["otp_expiry"] = time() + 300; // 5 minutes expiry
@@ -153,61 +133,30 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && $employee_ID && $password) {
             $_SESSION["auth_method"] = "2FA";
 
             if (sendOTP($row["email"], $otp)) {
-                logAttempt($cr2_usm, $employee_ID, $Name, $Role, 'Authenticating', 'Login', 0, 'Authenticating', '');
-                logDepartmentAttempt($cr2_usm, $Department_ID, $employee_ID, $Name, $Role, 'Success', 'Login', 0, 'Login Successful', '');
+                logAttempt($db_connection, $employee_ID, $Name, $Role, 'Authenticating', 'Login', 0, 'Authenticating', '');
+                logDepartmentAttempt($db_connection, $Department_ID, $employee_ID, $Name, $Role, 'Success', 'Login', 0, 'Login Successful', '');
                 header("Location: 2fa_verify.php");
                 exit();
             } else {
-                logAttempt($cr2_usm, $employee_ID, $Name, $Role, 'Failed', 'Login', 0, 'Failed to send OTP email', '');
+                logAttempt($db_connection, $employee_ID, $Name, $Role, 'Failed', 'Login', 0, 'Failed to send OTP email', '');
                 $_SESSION["loginError"] = "Failed to send OTP email.";
                 header("Location: index.php");
                 exit();
             }
         } else {
             incrementLoginAttempts($employee_ID);
-            logAttempt($cr2_usm, $employee_ID, $Name, $Role, 'Failed', 'Login', 0, 'Incorrect password', '');
+            logAttempt($db_connection, $employee_ID, $Name, $Role, 'Failed', 'Login', 0, 'Incorrect password', '');
             $_SESSION["loginError"] = "Incorrect password.";
             header("Location: index.php");
             exit();
         }
     }
 
-    // Check in Department USM
-    $stmt = mysqli_prepare($usm_connection, "SELECT email, employee_name, password, role, Dept_id FROM department_accounts WHERE employee_id = ?");
-    mysqli_stmt_bind_param($stmt, "s", $employee_ID);
-    mysqli_stmt_execute($stmt);
-    $result = mysqli_stmt_get_result($stmt);
-
-    if ($result && mysqli_num_rows($result) > 0) {
-        $row = mysqli_fetch_assoc($result);
-        $Department_ID = $row["Dept_id"];
-        $Role = $row["role"];
-        $Name = $row["employee_name"];
-
-        if ($password === $row["password"]) {
-            // Full login for this DB
-            $_SESSION["employee_id"] = $employee_ID;
-            $_SESSION["role"] = $Role;
-            $_SESSION["Dept_id"] = $row["Dept_id"];
-            $_SESSION["email"] = $row["email"] ?? $row["Email"] ?? '';
-            header("Location: dashboard.php");
-            exit();
-        } else {
-            incrementLoginAttempts($employee_ID);
-            logAttempt($usm_connection, $employee_ID, $Name, $Role, 'Failed', 'Login', 0, 'Incorrect password', '');
-            $_SESSION["loginError"] = "Incorrect password.";
-            header("Location: index.php");
-            exit();
-        }
-    }
-
-    // If we reach here — no user found in checked DBs
+    // If we reach here — no user found
     $_SESSION["loginError"] = "Invalid employee ID or password.";
     header("Location: index.php");
     exit();
 }
-
-
 ?>
 <!DOCTYPE html>
 <html lang="en" data-theme="light">
@@ -238,7 +187,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && $employee_ID && $password) {
     </style>
 </head>
 <body>
-  
    
    <section class="relative w-full h-screen">
         <!-- Background image with overlay -->
@@ -445,11 +393,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && $employee_ID && $password) {
                                 </div>
                             </div>
 
-                            <!-- Google reCAPTCHA widget -->
-                            <!-- <div class="mb-4">
-                                <div class="g-recaptcha" data-sitekey="6Ld4W8ArAAAAAK3qsDWjdvj6MNiXFJDPMgHGfhrw"></div>
-                            </div> -->
-
                             <!-- Sign In Button -->
                             <button 
                                 type="submit" 
@@ -460,7 +403,15 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && $employee_ID && $password) {
                             </button>
                         </form>
                         
-                 
+                        <!-- Additional Options -->
+                        <div class="mt-4 text-center">
+                            <p class="text-white/70 text-sm">
+                                Need help? Contact 
+                                <a href="mailto:support@soliera.com" class="text-blue-400 hover:text-blue-300">
+                                    support@soliera.com
+                                </a>
+                            </p>
+                        </div>
                     </div>
                 </div>
             </div>

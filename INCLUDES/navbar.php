@@ -1,5 +1,3 @@
-
- 
 <header class="bg-base-100 shadow-sm z-10 border-b border-base-300 dark:border-gray-700" data-theme="light">
   <div class="px-4 sm:px-6 lg:px-8">
     <div class="flex items-center justify-between h-16">
@@ -102,7 +100,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Update every second
   setInterval(updatePhilippineTime, 1000);
+  
+  // Initialize Lucide icons in navbar
+  lucide.createIcons();
 });
+
+// Make toggleSidebar available globally if sidebar script hasn't loaded yet
+if (typeof toggleSidebar === 'undefined') {
+  function toggleSidebar() {
+    console.warn('Sidebar function not loaded yet. Make sure sidebar.php is included.');
+  }
+  window.toggleSidebar = toggleSidebar;
+}
 </script>
 
 <style>
