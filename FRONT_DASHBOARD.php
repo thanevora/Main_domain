@@ -252,13 +252,12 @@ if ($result && $result->num_rows > 0) {
                 <!-- Header Section -->
                 <div class="mb-10">
                     <h1 class="text-4xl font-bold text-primary mb-3">Department Dashboard</h1>
-                    <p class="text-gray-600 text-lg">Hover over department cards to view details. Click to access the system.</p>
                     
                     <!-- Admin Button -->
                     <div class="mt-6">
                         <button id="adminToggle" class="btn btn-primary gap-2">
                             <i data-lucide="settings" class="w-5 h-5"></i>
-                            Manage Dashboard Cards
+                            Manage Domain
                         </button>
                     </div>
                 </div>
@@ -362,9 +361,8 @@ if ($result && $result->num_rows > 0) {
                 <div>
                     <h2 class="text-3xl font-bold text-primary flex items-center gap-3">
                         <i data-lucide="layout-dashboard" class="w-8 h-8"></i>
-                        Manage Dashboard Cards
+                        Manage Domain
                     </h2>
-                    <p class="text-base-content/60 mt-2">Customize and organize your dashboard widgets</p>
                 </div>
                 <button id="closeAdmin" class="btn btn-circle btn-ghost hover:bg-base-300 transition-all">
                     <i data-lucide="x" class="w-6 h-6"></i>
